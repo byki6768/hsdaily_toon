@@ -13,6 +13,8 @@
   - Cloud Function `generateComicScenario` (`asia-northeast3`)
   - Secret `GEMINI_API_KEY` (서버 전용, 클라이언트에 키 없음)
 - 일기 → Gemini 4컷 시나리오 → Firestore `scenarios` 저장 흐름
+- **GitHub**: https://github.com/byki6768/hsdaily_toon (`main`)
+- **Vercel 배포**: https://hsdaily-toon-behs8ev9c-byki6768.vercel.app
 
 ## 다시 시작하기 (로컬)
 
@@ -37,33 +39,18 @@ npx firebase-tools use hsdaily-toon
 - Flutter에 `firebase_auth` + `google_sign_in`(또는 웹용 팝업) 연결
 - 최초 로그인 시 `users` + `public_ids` 생성, **닉네임 입력** UI
 - `auth` feature 화면을 placeholder에서 실제 로그인으로 교체
-- 웹: Firebase 콘솔 → Authentication → Settings → **Authorized domains**에 Vercel 도메인 추가
+- 웹: Firebase 콘솔 → Authentication → Settings → **Authorized domains**에  
+  `hsdaily-toon-behs8ev9c-byki6768.vercel.app` 및 프로덕션 Vercel 도메인 추가
 
-### 2) GitHub 연동
+### 2) GitHub — 완료
 
-```bash
-# 이 폴더는 이미 git init + 초기 커밋된 상태여야 함
-gh repo create hsdaily-toon --private --source=. --remote=origin --push
-# 또는 GitHub에서 빈 repo 생성 후:
-git remote add origin https://github.com/<USER>/hsdaily-toon.git
-git push -u origin main
-```
+https://github.com/byki6768/hsdaily_toon
 
-주의: `.env`, `GEMINI_API_KEY`, `functions/.env`는 커밋하지 말 것 (이미 gitignore).
+### 3) Vercel 웹 배포 — 1차 완료
 
-### 3) Vercel 웹 배포
-
-Flutter 웹은 정적 빌드 후 Hosting/Vercel에 올리는 방식이 일반적입니다.
-
-```bash
-flutter build web --release
-```
-
-- Vercel: GitHub 연결 → Root는 빌드 산출물 전략 선택
-  - 옵션 A: GitHub Action으로 `flutter build web` 후 `build/web` 배포
-  - 옵션 B: Vercel 대신 **Firebase Hosting** (`firebase deploy --only hosting`)도 가능
-- Cloud Functions는 이미 Firebase에 있음 → Vercel에 Functions를 옮길 필요 없음
-- 웹에서 Callable 호출 시 region `asia-northeast3` 유지 (`ScenarioService`)
+- 배포 URL: https://hsdaily-toon-behs8ev9c-byki6768.vercel.app
+- Cloud Functions는 Firebase에 유지 (`asia-northeast3`)
+- 이후 `main` push 시 Vercel 자동 배포 확인
 
 ### 4) UI/UX 마무리
 
@@ -93,8 +80,8 @@ flutter build web --release
 
 ## Cursor에서 다시 열 때 예시 프롬프트
 
-> hsdaily-toon 이어서 진행해 줘. Google 로그인을 Flutter에 연결하고 users/public_ids 최초 가입(닉네임)까지 구현한 뒤, GitHub push와 Vercel(또는 Firebase Hosting) 웹 배포를 설정해 줘. 마지막에 UI/UX 폴리시를 해 줘.
+> hsdaily-toon 이어서: Google 로그인을 Flutter에 연결하고 users/public_ids + 닉네임 온보딩을 구현해 줘. Vercel 도메인을 Firebase Authorized domains에 넣고, UI/UX 폴리시를 진행해 줘.
 
 ---
 
-저장일: 로컬 git 초기 커밋 기준. Firebase(콘솔·Functions·Secret)는 클라우드에 유지됨.
+저장일: GitHub/Vercel 1차 배포 반영 후. Firebase(콘솔·Functions·Secret)는 클라우드에 유지됨.
