@@ -14,7 +14,7 @@
   - Secret `GEMINI_API_KEY` (서버 전용, 클라이언트에 키 없음)
 - 일기 → Gemini 4컷 시나리오 → Firestore `scenarios` 저장 흐름
 - **GitHub**: https://github.com/byki6768/hsdaily_toon (`main`)
-- **Vercel 배포**: https://hsdaily-toon-behs8ev9c-byki6768.vercel.app
+- **Vercel 배포**: https://hsdaily-toon-git-main-byki6768.vercel.app/ (정상 확인)
 
 ## 다시 시작하기 (로컬)
 
@@ -48,9 +48,10 @@ https://github.com/byki6768/hsdaily_toon
 
 ### 3) Vercel 웹 배포 — 1차 완료
 
-- 배포 URL: https://hsdaily-toon-behs8ev9c-byki6768.vercel.app
+- 배포 URL: https://hsdaily-toon-git-main-byki6768.vercel.app/
 - Cloud Functions는 Firebase에 유지 (`asia-northeast3`)
-- 이후 `main` push 시 Vercel 자동 배포 확인
+- 타인에게 Vercel 로그인만 보이면 Deployment Protection 해제
+- Firebase Auth Authorized domains에 위 도메인 포함 여부 확인
 
 ### 4) UI/UX 마무리
 

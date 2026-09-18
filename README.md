@@ -5,9 +5,9 @@ Flutter 3.x 기반 **웹 + 모바일** 크로스 플랫폼 앱입니다.
 - **앱 이름**: 4컷 일기 (Daily-toon)
 - **DB / Auth / Functions**: Firebase (`hsdaily-toon`)
 - **GitHub**: https://github.com/byki6768/hsdaily_toon
-- **Vercel (웹)**: https://hsdaily-toon-behs8ev9c-byki6768.vercel.app  
-  - `vercel.json` + `scripts/vercel_build.sh`로 Flutter web 빌드 설정 추가됨  
-  - 배포가 안 보이면 Vercel 프로젝트 → **Deployment Protection** 끄기 / Framework Preset을 **Other**로
+- **Vercel (웹)**: https://hsdaily-toon-git-main-byki6768.vercel.app/
+  - Flutter web 빌드: `vercel.json` + `scripts/vercel_build.sh`
+  - 외부에서 Vercel 로그인 화면만 보이면 **Deployment Protection**을 끄세요
 
 ## 구조 (FSD)
 
