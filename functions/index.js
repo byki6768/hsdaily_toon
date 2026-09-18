@@ -14,15 +14,15 @@ setGlobalOptions({ region: "asia-northeast3" });
 
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
-/** Prefer the model from the product brief; fall back if unavailable. */
+/** Models available for this API key. */
 const MODEL_CANDIDATES = [
-  "gemini-3.8-flash",
-  "gemini-3.5-flash",
+  "gemini-3.6-flash",
   "gemini-3-flash-preview",
-  "gemini-2.5-flash",
+  "gemini-flash-latest",
+  "gemini-3.1-flash-lite",
 ];
 
-const PANEL_TINTS = ["아침", "낮", "저녁", "밤"];
+const PANEL_LABELS = ["아침", "낮", "저녁", "밤"];
 
 function buildPrompt(diaryText) {
   return `당신은 따뜻하고 감성적인 4컷 만화 시나리오 작가입니다.
@@ -71,43 +71,78 @@ function normalizePanels(parsed) {
     return {
       index: i + 1,
       description,
-      label: PANEL_TINTS[i],
+      label: PANEL_LABELS[i],
     };
   });
 }
 
+function toResult(model, outputText) {
+  const parsed = extractJson(outputText);
+  const panels = normalizePanels(parsed);
+  return {
+    model,
+    title: String(parsed.title ?? "오늘의 4컷 일기").trim() || "오늘의 4컷 일기",
+    panels,
+    rawText: outputText,
+  };
+}
+
+async function generateWithContent(ai, model, prompt) {
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+  });
+  const outputText = response.text ?? "";
+  if (!outputText.trim()) {
+    throw new Error("Empty generateContent response");
+  }
+  return toResult(model, outputText);
+}
+
+async function generateWithInteractions(ai, model, prompt) {
+  const interaction = await ai.interactions.create({
+    model,
+    input: prompt,
+  });
+  const outputText = interaction.output_text ?? "";
+  if (!outputText.trim()) {
+    throw new Error("Empty interactions response");
+  }
+  return toResult(model, outputText);
+}
+
 async function callGemini(diaryText, apiKey) {
-  // GoogleGenAI reads GEMINI_API_KEY from env when constructed with {}.
-  process.env.GEMINI_API_KEY = apiKey;
-  const ai = new GoogleGenAI({});
-  const input = buildPrompt(diaryText);
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = buildPrompt(diaryText);
 
   let lastError;
   for (const model of MODEL_CANDIDATES) {
+    // Prefer generateContent (stable for this key), then Interactions.
     try {
-      const interaction = await ai.interactions.create({
-        model,
-        input,
-      });
-      const outputText = interaction.output_text ?? "";
-      const parsed = extractJson(outputText);
-      const panels = normalizePanels(parsed);
-      return {
-        model,
-        title: String(parsed.title ?? "오늘의 4컷 일기").trim() || "오늘의 4컷 일기",
-        panels,
-        rawText: outputText,
-      };
+      return await generateWithContent(ai, model, prompt);
     } catch (err) {
       lastError = err;
-      console.warn(`Gemini model failed: ${model}`, err?.message ?? err);
+      console.warn(
+        `generateContent failed: ${model}`,
+        err?.message ?? err,
+      );
+    }
+    try {
+      return await generateWithInteractions(ai, model, prompt);
+    } catch (err) {
+      lastError = err;
+      console.warn(
+        `interactions failed: ${model}`,
+        err?.message ?? err,
+      );
     }
   }
   throw lastError ?? new Error("All Gemini models failed");
 }
 
 function makeGuestPublicId() {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const alphabet =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let id = "G";
   for (let i = 0; i < 15; i++) {
     id += alphabet[Math.floor(Math.random() * alphabet.length)];
@@ -124,7 +159,6 @@ export const generateComicScenario = onCall(
     secrets: [geminiApiKey],
     timeoutSeconds: 120,
     memory: "512MiB",
-    // Diary flow may run before Google login is wired.
     invoker: "public",
   },
   async (request) => {

@@ -84,9 +84,12 @@ class _DiaryLoadingScreenState extends State<DiaryLoadingScreen>
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _errorMessage = e.message ?? '시나리오 생성에 실패했어요.';
+        final detail = (e.message ?? '').trim();
+        _errorMessage = detail.isEmpty
+            ? '시나리오 생성에 실패했어요. (${e.code})'
+            : detail;
       });
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;

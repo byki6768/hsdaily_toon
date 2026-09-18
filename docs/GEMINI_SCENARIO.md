@@ -20,4 +20,5 @@ npx firebase-tools functions:secrets:set GEMINI_API_KEY --data-file=- --project 
 
 ## 모델
 
-우선순위: `gemini-3.8-flash` → `gemini-3.5-flash` → `gemini-3-flash-preview` → `gemini-2.5-flash`
+우선순위: `gemini-3.6-flash` → `gemini-3-flash-preview` → `gemini-flash-latest` → `gemini-3.1-flash-lite`  
+SDK: `@google/genai` ≥ 2.x (`models.generateContent` 우선, Interactions 폴백)
