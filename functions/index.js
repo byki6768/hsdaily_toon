@@ -692,3 +692,168 @@ export const withdrawMember = onCall(
     return { ok: true, publicId };
   },
 );
+
+/**
+ * Provision Firestore membership after Firebase Auth signup/login.
+ * Admin write avoids client rule edge-cases on first profile create.
+ * Callable (auth required): {
+ *   email?, googleEmail?, countryCode?, nationalNumber?,
+ *   authProviders: string[], photoUrl?
+ * }
+ */
+export const provisionMember = onCall(
+  {
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    invoker: "public",
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "로그인이 필요해요.");
+    }
+    const uid = request.auth.uid;
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const existing = await userRef.get();
+    if (existing.exists) {
+      const data = existing.data() ?? {};
+      if (data.isWithdrawn === true || data.status === "withdrawn") {
+        throw new HttpsError("failed-precondition", "탈퇴한 계정입니다");
+      }
+      return {
+        authUid: uid,
+        publicId: data.publicId,
+        nickname: data.nickname ?? null,
+        nicknameSet: data.nicknameSet === true,
+        email: data.email ?? null,
+        googleEmail: data.googleEmail ?? null,
+        phone: data.phone ?? null,
+        phoneDisplay: data.phoneDisplay ?? null,
+        authProviders: data.authProviders ?? [],
+        photoUrl: data.photoUrl ?? null,
+        status: data.status ?? "active",
+        isWithdrawn: false,
+      };
+    }
+
+    const email = String(request.data?.email ?? "").trim().toLowerCase() || null;
+    const googleEmail =
+      String(request.data?.googleEmail ?? "").trim().toLowerCase() || null;
+    const countryCodeRaw = String(request.data?.countryCode ?? "").trim();
+    const nationalRaw = String(request.data?.nationalNumber ?? "").trim();
+    const authProviders = Array.isArray(request.data?.authProviders)
+      ? request.data.authProviders.map(String)
+      : ["email"];
+    const photoUrl = String(request.data?.photoUrl ?? "").trim() || null;
+
+    const digits = (s) => String(s).replace(/[^0-9]/g, "");
+    let phone = null;
+    let phoneDisplay = null;
+    if (countryCodeRaw || nationalRaw) {
+      const cc = `+${digits(countryCodeRaw) || "82"}`;
+      const nn = digits(nationalRaw);
+      if (nn.length < 9 || nn.length > 11) {
+        throw new HttpsError(
+          "invalid-argument",
+          "휴대폰 번호를 입력하세요",
+        );
+      }
+      phone = { countryCode: cc, nationalNumber: nn };
+      phoneDisplay = `${cc} ${nn}`;
+    }
+
+    const letters =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+    const alnum =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    let publicId = "";
+    for (let attempt = 0; attempt < 12; attempt++) {
+      let id = letters[Math.floor(Math.random() * letters.length)];
+      for (let i = 0; i < 15; i++) {
+        id += alnum[Math.floor(Math.random() * alnum.length)];
+      }
+      const snap = await db.collection("public_ids").doc(id).get();
+      if (!snap.exists) {
+        publicId = id;
+        break;
+      }
+    }
+    if (!publicId) {
+      throw new HttpsError("internal", "고유 ID를 만들지 못했어요.");
+    }
+
+    const now = FieldValue.serverTimestamp();
+    const batch = db.batch();
+    batch.set(userRef, {
+      publicId,
+      nickname: null,
+      nicknameSet: false,
+      email,
+      googleEmail,
+      phone,
+      phoneDisplay,
+      authProviders,
+      photoUrl,
+      status: "active",
+      isWithdrawn: false,
+      withdrawnAt: null,
+      createdAt: now,
+      updatedAt: now,
+      lastLoginAt: now,
+      lastComicDate: null,
+      comicCountTotal: 0,
+    });
+    batch.set(db.collection("public_ids").doc(publicId), {
+      publicId,
+      authUid: uid,
+      status: "active",
+      createdAt: now,
+      releasedAt: null,
+    });
+
+    if (email) {
+      batch.set(db.collection("auth_lookup").doc(`email_${email}`), {
+        authUid: uid,
+        type: "email",
+        value: email,
+      });
+    }
+    if (googleEmail) {
+      batch.set(db.collection("auth_lookup").doc(`email_${googleEmail}`), {
+        authUid: uid,
+        type: "googleEmail",
+        value: googleEmail,
+      });
+    }
+    if (phone) {
+      batch.set(
+        db
+          .collection("auth_lookup")
+          .doc(`phone_${phone.countryCode}_${phone.nationalNumber}`),
+        {
+          authUid: uid,
+          type: "phone",
+          countryCode: phone.countryCode,
+          nationalNumber: phone.nationalNumber,
+        },
+      );
+    }
+
+    await batch.commit();
+
+    return {
+      authUid: uid,
+      publicId,
+      nickname: null,
+      nicknameSet: false,
+      email,
+      googleEmail,
+      phone,
+      phoneDisplay,
+      authProviders,
+      photoUrl,
+      status: "active",
+      isWithdrawn: false,
+    };
+  },
+);

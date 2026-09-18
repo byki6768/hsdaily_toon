@@ -50,7 +50,8 @@ abstract final class AuthValidators {
   }) {
     final cc = digitsOnly(countryCode);
     final nn = digitsOnly(nationalNumber);
-    return 'p${cc}_$nn@phone.hsdaily-toon.auth';
+    // Use project auth domain so Identity Toolkit accepts the address.
+    return 'p${cc}_$nn@phone.hsdaily-toon.firebaseapp.com';
   }
 
   static String maskPasswordDisplay() => '********';

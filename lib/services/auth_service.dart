@@ -6,6 +6,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import 'package:hsdaily_toon/features/auth/model/auth_validators.dart';
 import 'package:hsdaily_toon/features/auth/model/member_profile.dart';
+import 'package:hsdaily_toon/services/member_provision_service.dart';
 import 'package:hsdaily_toon/services/user_repository.dart';
 
 /// Central auth + membership session.
@@ -13,15 +14,18 @@ class AuthService extends ChangeNotifier {
   AuthService({
     FirebaseAuth? auth,
     UserRepository? users,
+    MemberProvisionService? provision,
     GoogleSignIn? googleSignIn,
   })  : _auth = auth ?? FirebaseAuth.instance,
         _users = users ?? UserRepository(),
+        _provision = provision ?? MemberProvisionService(),
         _google = googleSignIn ?? GoogleSignIn.instance {
     _sub = _auth.authStateChanges().listen(_onAuthChanged);
   }
 
   final FirebaseAuth _auth;
   final UserRepository _users;
+  final MemberProvisionService _provision;
   final GoogleSignIn _google;
 
   StreamSubscription<User?>? _sub;
@@ -110,11 +114,14 @@ class AuthService extends ChangeNotifier {
         password: password,
       );
       final user = cred.user!;
-      final profile = await _users.createMember(
-        authUid: user.uid,
+      await _provision.provision(
         email: email.trim().toLowerCase(),
         authProviders: const ['email'],
       );
+      final profile = await _users.getProfile(user.uid);
+      if (profile == null) {
+        throw StateError('profile-missing-after-provision');
+      }
       _profile = profile;
       _booting = false;
       notifyListeners();
@@ -137,12 +144,15 @@ class AuthService extends ChangeNotifier {
         password: password,
       );
       final user = cred.user!;
-      final profile = await _users.createMember(
-        authUid: user.uid,
+      await _provision.provision(
         countryCode: countryCode,
         nationalNumber: nationalNumber,
         authProviders: const ['phone'],
       );
+      final profile = await _users.getProfile(user.uid);
+      if (profile == null) {
+        throw StateError('profile-missing-after-provision');
+      }
       _profile = profile;
       _booting = false;
       notifyListeners();
@@ -228,13 +238,16 @@ class AuthService extends ChangeNotifier {
 
       var profile = await _users.getProfile(user.uid);
       if (profile == null) {
-        profile = await _users.createMember(
-          authUid: user.uid,
+        await _provision.provision(
           googleEmail: user.email,
           email: user.email,
           authProviders: const ['google'],
           photoUrl: user.photoURL,
         );
+        profile = await _users.getProfile(user.uid);
+        if (profile == null) {
+          throw StateError('profile-missing-after-provision');
+        }
       } else if (profile.isWithdrawn) {
         await _auth.signOut();
         throw FirebaseAuthException(

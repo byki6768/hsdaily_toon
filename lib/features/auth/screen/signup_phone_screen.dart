@@ -1,3 +1,4 @@
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -106,9 +107,25 @@ class _SignupPhoneScreenState extends State<SignupPhoneScreen> {
         AppRouter.nicknameWelcome,
         (r) => false,
       );
-    } on FirebaseAuthException {
-      setState(() => _phoneBubble = '가입에 실패했어요. 다시 시도해 주세요');
-    } catch (_) {
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _phoneBubble = switch (e.code) {
+          'email-already-in-use' => '이미 가입된 휴대폰 번호예요',
+          'invalid-email' => '휴대폰 번호를 입력하세요',
+          'weak-password' => '비밀번호를 6자 이상으로 입력해 주세요',
+          'operation-not-allowed' =>
+            '휴대폰 가입이 잠시 막혀 있어요. 관리자에게 문의해 주세요',
+          _ => '가입에 실패했어요 (${e.code}). 다시 시도해 주세요',
+        };
+      });
+    } on FirebaseFunctionsException catch (e) {
+      setState(() {
+        _phoneBubble = (e.message ?? '').trim().isNotEmpty
+            ? e.message!
+            : '회원 정보 저장에 실패했어요. 다시 시도해 주세요';
+      });
+    } catch (e) {
+      debugPrint('phone signup failed: $e');
       setState(() => _phoneBubble = '가입에 실패했어요. 다시 시도해 주세요');
     } finally {
       if (mounted) setState(() => _busy = false);
