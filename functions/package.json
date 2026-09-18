@@ -1,0 +1,19 @@
+{
+  "name": "hsdaily-toon-functions",
+  "description": "Cloud Functions for hsdaily-toon (Gemini scenario generation)",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "@google/genai": "^1.46.0",
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^6.6.0"
+  },
+  "private": true
+}
