@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>일기를 말로 적을 수 있도록 마이크 권한이 필요해요.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>음성을 텍스트로 바꿔 일기에 넣기 위해 음성 인식 권한이 필요해요.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>글자가 있는 사진에서 일기 내용을 읽어 오기 위해 사진 접근이 필요해요.</string>
 </dict>
 </plist>

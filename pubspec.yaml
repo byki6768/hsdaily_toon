@@ -39,6 +39,9 @@ dependencies:
   google_fonts: ^8.2.1
   cloud_functions: ^6.5.0
   cloud_firestore: ^6.10.0
+  speech_to_text: ^7.5.0
+  file_picker: ^13.1.0
+  permission_handler: ^13.0.2
 
 dev_dependencies:
   flutter_test:

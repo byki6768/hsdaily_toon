@@ -25,7 +25,7 @@ class DiaryHeader extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          '오늘 하루를 편하게 적어 보세요.\n마음이 가는 대로, 짧게든 길게든 괜찮아요.',
+          '오늘 하루를 편하게 적어 보세요.\n말로 하거나 사진·PDF를 올려도 좋아요.',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 fontSize: wide ? 16 : 15,
                 color: AppColors.inkSoft,

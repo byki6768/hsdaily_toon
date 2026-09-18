@@ -511,3 +511,95 @@ export const generateComicImages = onCall(
     }
   },
 );
+
+/**
+ * OCR / Vision — extract diary text from image or PDF via Gemini.
+ * Callable: { mimeType: string, dataBase64: string }
+ */
+export const extractDiaryText = onCall(
+  {
+    secrets: [geminiApiKey],
+    timeoutSeconds: 120,
+    memory: "1GiB",
+    invoker: "public",
+  },
+  async (request) => {
+    const mimeType = String(request.data?.mimeType ?? "").trim().toLowerCase();
+    const dataBase64 = String(request.data?.dataBase64 ?? "").trim();
+
+    const allowed = new Set([
+      "image/jpeg",
+      "image/jpg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "application/pdf",
+    ]);
+    if (!allowed.has(mimeType)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "이미지(JPG/PNG/WebP/GIF)나 PDF만 올릴 수 있어요.",
+      );
+    }
+    if (!dataBase64 || dataBase64.length < 32) {
+      throw new HttpsError("invalid-argument", "파일이 비어 있어요.");
+    }
+    // ~6MB base64 ≈ 4.5MB binary — keep under callable limits.
+    if (dataBase64.length > 8_000_000) {
+      throw new HttpsError(
+        "invalid-argument",
+        "파일이 너무 커요. 조금 더 작은 파일로 올려 주세요.",
+      );
+    }
+
+    const prompt = `이 파일에 적힌 글자를 읽어, 일기 본문으로 쓸 수 있는 한국어 텍스트만 추출하세요.
+규칙:
+- 설명/마크다운/따옴표 없이 본문만 출력
+- 글자가 없으면 빈 문자열
+- 날짜·제목이 보이면 자연스럽게 포함해도 됨
+- 손으로 쓴 글씨도 최대한 읽기`;
+
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey.value() });
+    const visionModels = [
+      "gemini-3.6-flash",
+      "gemini-3-flash-preview",
+      "gemini-flash-latest",
+      "gemini-3.1-flash-lite",
+    ];
+
+    let lastError;
+    for (const model of visionModels) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                {
+                  inlineData: {
+                    mimeType:
+                      mimeType === "image/jpg" ? "image/jpeg" : mimeType,
+                    data: dataBase64,
+                  },
+                },
+              ],
+            },
+          ],
+        });
+        const text = String(response.text ?? "").trim();
+        return { text, model };
+      } catch (err) {
+        lastError = err;
+        console.warn(`Vision OCR failed: ${model}`, err?.message ?? err);
+      }
+    }
+
+    console.error("Vision OCR failed", lastError);
+    throw new HttpsError(
+      "internal",
+      "글자를 읽는 중에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.",
+    );
+  },
+);

@@ -4,7 +4,18 @@
 
 - API 키는 **클라이언트(Flutter)에 넣지 않습니다.**
 - Firebase Secret `GEMINI_API_KEY` → Cloud Function 환경에서만 사용
-- 로컬 예시: `.env.example` 참고 (`functions/.env`는 gitignore)
+- 로컬: 루트 `.env.local` (gitignore) — `GEMINI_API_KEY` / `GEMINI_VISION_API_KEY`
+- 예시: `.env.example` 참고
+
+시크릿 설정:
+```bash
+npx firebase-tools functions:secrets:set GEMINI_API_KEY --data-file=- --project hsdaily-toon
+```
+
+## 입력 보조
+
+- **음성**: 웹은 Web Speech API, 모바일은 네이티브 STT → 일기 칸에 자동 입력 → 기존 Gemini 시나리오/이미지 흐름으로 전달
+- **사진·PDF**: `extractDiaryText` (Gemini Vision) → 추출 텍스트를 일기 칸에 자동 입력
 
 시크릿 설정:
 ```bash
