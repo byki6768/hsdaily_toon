@@ -120,8 +120,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
   @override
   Widget build(BuildContext context) {
     final profile = authService?.profile;
-    final publicId = profile?.publicId ?? '-';
-    final nickHint = profile?.nickname ?? publicId;
+    final nickHint = profile?.publicId ?? '닉네임을 입력해 주세요';
 
     return Scaffold(
       backgroundColor: AppColors.blush,
@@ -145,7 +144,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 28),
                         Text('닉네임', style: GoogleFonts.gaegu(fontSize: 18)),
                         const SizedBox(height: 8),
                         Row(
@@ -178,18 +177,7 @@ class _MyPageScreenState extends State<MyPageScreen> {
                               ),
                           ],
                         ),
-                        const SizedBox(height: 20),
-                        Text('고유 ID', style: GoogleFonts.gaegu(fontSize: 18)),
-                        const SizedBox(height: 8),
-                        Text(
-                          publicId,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: AppColors.inkSoft,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+                        const SizedBox(height: 28),
                         Text('비밀번호', style: GoogleFonts.gaegu(fontSize: 18)),
                         const SizedBox(height: 8),
                         Row(
@@ -222,9 +210,11 @@ class _MyPageScreenState extends State<MyPageScreen> {
                             onPressed: _savePw,
                           ),
                         ],
-                        const SizedBox(height: 40),
-                        if (_withdrawBubble.isNotEmpty)
+                        const SizedBox(height: 28),
+                        if (_withdrawBubble.isNotEmpty) ...[
                           AuthFieldBubble(message: _withdrawBubble),
+                          const SizedBox(height: 8),
+                        ],
                         SizedBox(
                           height: 52,
                           child: FilledButton(
