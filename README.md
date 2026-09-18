@@ -50,5 +50,5 @@ flutter run             # 연결된 모바일/에뮬레이터
 ## 다음 단계
 
 1. Flutter에 Google 로그인 + 닉네임 온보딩 연동
-2. Vercel 도메인을 Firebase Auth Authorized domains에 추가
-3. UI/UX 폴리시, 갤러리 실데이터 연결
+2. UI/UX 폴리시, 갤러리 실데이터 연결
+3. (선택) 커스텀 Vercel 프로덕션 도메인도 Authorized domains에 추가

@@ -39,8 +39,8 @@ npx firebase-tools use hsdaily-toon
 - Flutter에 `firebase_auth` + `google_sign_in`(또는 웹용 팝업) 연결
 - 최초 로그인 시 `users` + `public_ids` 생성, **닉네임 입력** UI
 - `auth` feature 화면을 placeholder에서 실제 로그인으로 교체
-- 웹: Firebase 콘솔 → Authentication → Settings → **Authorized domains**에  
-  `hsdaily-toon-behs8ev9c-byki6768.vercel.app` 및 프로덕션 Vercel 도메인 추가
+- 웹: Firebase Auth **Authorized domains**에 Vercel 도메인 추가 **완료**  
+  (`hsdaily-toon-behs8ev9c-byki6768.vercel.app`)
 
 ### 2) GitHub — 완료
 
