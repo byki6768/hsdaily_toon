@@ -310,14 +310,14 @@ function makeGuestPublicId() {
 }
 
 /**
- * Callable: { diaryText: string, publicId?: string, diaryId?: string }
- * Returns scenario + 4 panel images (Storage URLs).
+ * Step 1 — Callable: { diaryText, publicId?, diaryId? }
+ * Returns 4-panel scenario text only (no images).
  */
 export const generateComicScenario = onCall(
   {
     secrets: [geminiApiKey],
-    timeoutSeconds: 540,
-    memory: "1GiB",
+    timeoutSeconds: 120,
+    memory: "512MiB",
     invoker: "public",
   },
   async (request) => {
@@ -389,12 +389,82 @@ export const generateComicScenario = onCall(
       status: "ready",
     });
 
-    const comicRef = db.collection("comics").doc();
-    await comicRef.set({
+    return {
       scenarioId: scenarioRef.id,
       diaryId,
       publicId,
       title: generated.title,
+      model: generated.model,
+      panels: generated.panels,
+      text,
+    };
+  },
+);
+
+/**
+ * Step 2 — Callable: { scenarioId } or { publicId, diaryId, title, panels[] }
+ * Generates 4 panel images from scenario descriptions.
+ */
+export const generateComicImages = onCall(
+  {
+    secrets: [geminiApiKey],
+    timeoutSeconds: 540,
+    memory: "1GiB",
+    invoker: "public",
+  },
+  async (request) => {
+    const db = getFirestore();
+    const scenarioId = String(request.data?.scenarioId ?? "").trim();
+
+    let publicId = String(request.data?.publicId ?? "").trim();
+    let diaryId = String(request.data?.diaryId ?? "").trim();
+    let title = String(request.data?.title ?? "").trim();
+    let panels = Array.isArray(request.data?.panels)
+      ? request.data.panels
+      : [];
+
+    if (scenarioId) {
+      const snap = await db.collection("scenarios").doc(scenarioId).get();
+      if (!snap.exists) {
+        throw new HttpsError("not-found", "시나리오를 찾을 수 없어요.");
+      }
+      const data = snap.data() ?? {};
+      publicId = publicId || String(data.publicId ?? "");
+      diaryId = diaryId || String(data.diaryId ?? "");
+      title = title || String(data.title ?? "오늘의 4컷 일기");
+      if (!panels.length) {
+        const panelsText = Array.isArray(data.panelsText)
+          ? data.panelsText
+          : [];
+        panels = panelsText.map((description, i) => ({
+          index: i + 1,
+          description: String(description ?? "").trim(),
+          label: PANEL_LABELS[i],
+        }));
+      }
+    }
+
+    if (!/^[A-Za-z][A-Za-z0-9]{15}$/.test(publicId)) {
+      publicId = makeGuestPublicId();
+    }
+    if (!title) title = "오늘의 4컷 일기";
+
+    let normalized;
+    try {
+      normalized = normalizePanels({ panels });
+    } catch (err) {
+      throw new HttpsError(
+        "invalid-argument",
+        "시나리오 장면이 부족해요. 먼저 시나리오를 만들어 주세요.",
+      );
+    }
+
+    const comicRef = db.collection("comics").doc();
+    await comicRef.set({
+      scenarioId: scenarioId || null,
+      diaryId: diaryId || null,
+      publicId,
+      title,
       imageUrls: [],
       storagePaths: [],
       thumbnailUrl: null,
@@ -402,26 +472,32 @@ export const generateComicScenario = onCall(
       status: "processing",
     });
 
-    let imageUrls = [];
-    let storagePaths = [];
-    let imageProviders = [];
     try {
       const images = await generateAndStoreComicImages({
         apiKey: geminiApiKey.value(),
         publicId,
         comicId: comicRef.id,
-        panels: generated.panels,
+        panels: normalized,
       });
-      imageUrls = images.imageUrls;
-      storagePaths = images.storagePaths;
-      imageProviders = images.imageProviders;
       await comicRef.update({
-        imageUrls,
-        storagePaths,
-        thumbnailUrl: imageUrls[0] ?? null,
-        imageProviders,
+        imageUrls: images.imageUrls,
+        storagePaths: images.storagePaths,
+        thumbnailUrl: images.imageUrls[0] ?? null,
+        imageProviders: images.imageProviders,
         status: "ready",
       });
+
+      return {
+        comicId: comicRef.id,
+        scenarioId: scenarioId || null,
+        diaryId: diaryId || null,
+        publicId,
+        title,
+        panels: normalized,
+        imageUrls: images.imageUrls,
+        storagePaths: images.storagePaths,
+        imageProviders: images.imageProviders,
+      };
     } catch (err) {
       console.error("Comic image generation failed", err);
       await comicRef.update({
@@ -433,19 +509,5 @@ export const generateComicScenario = onCall(
         "만화 이미지 생성에 실패했어요. 잠시 후 다시 시도해 주세요.",
       );
     }
-
-    return {
-      scenarioId: scenarioRef.id,
-      comicId: comicRef.id,
-      diaryId,
-      publicId,
-      title: generated.title,
-      model: generated.model,
-      panels: generated.panels,
-      text,
-      imageUrls,
-      storagePaths,
-      imageProviders,
-    };
   },
 );

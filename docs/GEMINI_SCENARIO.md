@@ -13,11 +13,12 @@ npx firebase-tools functions:secrets:set GEMINI_API_KEY --data-file=- --project 
 
 ## 흐름
 
-1. 앱: 일기 작성 → `generateComicScenario` callable 호출  
-2. Function: Gemini로 4장면 JSON 시나리오 생성  
-3. Firestore `diaries` / `scenarios` 저장  
-4. Function: 컷별 이미지 생성 → Storage `comics/{publicId}/{comicId}/panel_N.*` 업로드 → `comics` 저장  
-5. 앱: `imageUrls`로 결과 화면 4칸 표시
+1. 앱: 일기 작성 → `generateComicScenario` (1단계)  
+2. Function: Gemini로 4장면 JSON 시나리오 생성 → Firestore `scenarios` 저장  
+3. 앱: 4칸 프레임 하단에 시나리오 문장 표시 + 다시 **만화로 만들기**  
+4. 앱: `generateComicImages` (2단계)  
+5. Function: 컷별 이미지 생성 → Storage 업로드 → `comics` 저장  
+6. 앱: `imageUrls`로 완성된 4컷 표시
 
 ## 모델
 

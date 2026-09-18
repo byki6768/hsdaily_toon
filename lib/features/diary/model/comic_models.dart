@@ -2,6 +2,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import 'package:hsdaily_toon/services/scenario_service.dart';
+
+/// Whether the result screen is showing scenario text only or finished art.
+enum ComicResultStage { scenario, images }
+
 /// Where a panel image comes from — swap dummy → AI later without UI changes.
 sealed class ComicImageSource {
   const ComicImageSource();
@@ -74,19 +79,31 @@ class ComicResult {
   const ComicResult({
     required this.diaryText,
     required this.strip,
+    this.scenario,
+    this.stage = ComicResultStage.scenario,
   });
 
   final String diaryText;
   final ComicStrip strip;
 
+  /// Server scenario payload — needed for step-2 image generation.
+  final GeneratedScenario? scenario;
+
+  /// Whether this result is scenario-only or has finished images.
+  final ComicResultStage stage;
+
   List<ComicPanel> get panels => strip.panels;
 
-  /// Builds a strip from Gemini scenario + generated panel image URLs.
+  bool get hasImages => stage == ComicResultStage.images;
+
+  /// Builds a strip from Gemini scenario + optional panel image URLs.
   factory ComicResult.fromGeneratedScenario({
     required String diaryText,
     required String title,
     required List<({int index, String description, String label})> panels,
     List<String> imageUrls = const [],
+    GeneratedScenario? scenario,
+    ComicResultStage? stage,
   }) {
     assert(panels.length == 4);
     const tints = <Color>[
@@ -95,9 +112,14 @@ class ComicResult {
       Color(0xFFF3C8C8),
       Color(0xFFFFE8DE),
     ];
+    final hasImages = imageUrls.length == 4 &&
+        imageUrls.every((url) => url.trim().isNotEmpty);
 
     return ComicResult(
       diaryText: diaryText,
+      scenario: scenario,
+      stage: stage ??
+          (hasImages ? ComicResultStage.images : ComicResultStage.scenario),
       strip: ComicStrip(
         title: title,
         panels: [
@@ -105,7 +127,7 @@ class ComicResult {
             ComicPanel(
               index: panels[i].index,
               caption: panels[i].description,
-              image: i < imageUrls.length && imageUrls[i].isNotEmpty
+              image: hasImages
                   ? NetworkComicImage(imageUrls[i])
                   : PlaceholderComicImage(
                       tint: tints[i],
@@ -116,6 +138,28 @@ class ComicResult {
             ),
         ],
       ),
+    );
+  }
+
+  ComicResult withImages(List<String> imageUrls) {
+    assert(imageUrls.length == 4);
+    return ComicResult.fromGeneratedScenario(
+      diaryText: diaryText,
+      title: strip.title,
+      scenario: scenario,
+      imageUrls: imageUrls,
+      stage: ComicResultStage.images,
+      panels: [
+        for (final p in panels)
+          (
+            index: p.index,
+            description: p.caption,
+            label: switch (p.image) {
+              PlaceholderComicImage(:final label) => label,
+              _ => '${p.index}',
+            },
+          ),
+      ],
     );
   }
 

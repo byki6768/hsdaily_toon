@@ -117,15 +117,6 @@ class _DummyPanelImage extends StatelessWidget {
                     color: AppColors.ink.withValues(alpha: 0.72),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'dummy',
-                  style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 1.2,
-                    color: AppColors.inkSoft.withValues(alpha: 0.55),
-                  ),
-                ),
               ],
             ),
           ),
