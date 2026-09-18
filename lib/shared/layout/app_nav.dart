@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:hsdaily_toon/router/app_router.dart';
+import 'package:hsdaily_toon/services/auth_service.dart';
 import 'package:hsdaily_toon/shared/layout/responsive_layout.dart';
 import 'package:hsdaily_toon/theme/app_theme.dart';
 
-enum AppNavItem { home, diary, gallery, auth }
+enum AppNavItem { home, diary, gallery, mypage }
 
 /// App navigation — vertical on desktop, horizontal strip on mobile.
 class AppNav extends StatelessWidget {
@@ -20,32 +21,41 @@ class AppNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDesktop =
         MediaQuery.sizeOf(context).width >= kDesktopBreakpoint;
+    final signedIn = authService?.isSignedIn ?? false;
 
-    final items = [
-      _NavSpec(
+    final items = <_NavSpec>[
+      const _NavSpec(
         item: AppNavItem.home,
         label: '홈',
         icon: Icons.home_outlined,
         route: AppRouter.home,
       ),
-      _NavSpec(
+      const _NavSpec(
         item: AppNavItem.diary,
         label: '일기 쓰기',
         icon: Icons.edit_note_outlined,
         route: AppRouter.diary,
       ),
-      _NavSpec(
+      const _NavSpec(
         item: AppNavItem.gallery,
         label: '갤러리',
         icon: Icons.auto_stories_outlined,
         route: AppRouter.gallery,
       ),
-      _NavSpec(
-        item: AppNavItem.auth,
-        label: '로그인',
-        icon: Icons.person_outline,
-        route: AppRouter.auth,
-      ),
+      if (signedIn)
+        const _NavSpec(
+          item: AppNavItem.mypage,
+          label: '마이페이지',
+          icon: Icons.person_outline,
+          route: AppRouter.mypage,
+        )
+      else
+        const _NavSpec(
+          item: AppNavItem.mypage,
+          label: '로그인',
+          icon: Icons.login_rounded,
+          route: AppRouter.login,
+        ),
     ];
 
     if (isDesktop) {

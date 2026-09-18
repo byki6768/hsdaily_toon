@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'package:hsdaily_toon/features/auth/ui/session_chrome.dart';
 import 'package:hsdaily_toon/features/home/ui/home_widgets.dart';
 import 'package:hsdaily_toon/shared/layout/app_nav.dart';
 import 'package:hsdaily_toon/shared/layout/responsive_layout.dart';
 import 'package:hsdaily_toon/theme/app_theme.dart';
 
-/// Home feature screen — "4컷 일기" main landing.
+/// Home feature screen — post-login main.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
@@ -13,9 +14,14 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.blush,
-      body: ResponsiveLayout(
-        sidebar: const AppNav(selected: AppNavItem.home),
-        content: const _HomeBody(),
+      body: Stack(
+        children: [
+          ResponsiveLayout(
+            sidebar: const AppNav(selected: AppNavItem.home),
+            content: const _HomeBody(),
+          ),
+          const SessionChrome(),
+        ],
       ),
     );
   }

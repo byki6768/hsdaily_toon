@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:hsdaily_toon/features/auth/ui/session_chrome.dart';
 import 'package:hsdaily_toon/features/diary/model/diary_state.dart';
 import 'package:hsdaily_toon/features/diary/model/soft_error_message.dart';
 import 'package:hsdaily_toon/features/diary/screen/diary_loading_screen.dart';
@@ -193,6 +194,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
               onUploadPressed: _onUploadPressed,
             ),
           ),
+          const SessionChrome(),
           if (_bubbleMessage != null)
             DiaryErrorBubble(
               key: ValueKey(_bubbleMessage),

@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { GoogleGenAI } from "@google/genai";
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
@@ -601,5 +602,93 @@ export const extractDiaryText = onCall(
       "internal",
       "글자를 읽는 중에 문제가 생겼어요. 잠시 후 다시 시도해 주세요.",
     );
+  },
+);
+
+/**
+ * Soft-withdraw: scrub PII + Auth account, keep publicId and content.
+ */
+export const withdrawMember = onCall(
+  {
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    invoker: "public",
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "로그인이 필요해요.");
+    }
+    const uid = request.auth.uid;
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    const snap = await userRef.get();
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "회원 정보를 찾을 수 없어요.");
+    }
+    const data = snap.data() ?? {};
+    const publicId = String(data.publicId ?? "");
+    const email = data.email ? String(data.email) : "";
+    const googleEmail = data.googleEmail ? String(data.googleEmail) : "";
+    const phone = data.phone ?? null;
+
+    const batch = db.batch();
+    batch.set(
+      userRef,
+      {
+        publicId,
+        nickname: null,
+        nicknameSet: false,
+        email: null,
+        googleEmail: null,
+        phone: null,
+        phoneDisplay: null,
+        authProviders: [],
+        photoUrl: null,
+        status: "withdrawn",
+        isWithdrawn: true,
+        withdrawnAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        // keep createdAt / comic stats for analytics
+      },
+      { merge: true },
+    );
+
+    if (publicId) {
+      batch.set(
+        db.collection("public_ids").doc(publicId),
+        {
+          authUid: null,
+          status: "orphaned",
+          releasedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    const lookups = [];
+    if (email) lookups.push(`email_${email.toLowerCase()}`);
+    if (googleEmail) lookups.push(`email_${googleEmail.toLowerCase()}`);
+    if (phone?.countryCode && phone?.nationalNumber) {
+      lookups.push(
+        `phone_${phone.countryCode}_${phone.nationalNumber}`,
+      );
+    }
+    for (const key of lookups) {
+      batch.delete(db.collection("auth_lookup").doc(key));
+    }
+
+    await batch.commit();
+
+    try {
+      await getAuth().deleteUser(uid);
+    } catch (err) {
+      console.error("Auth delete failed", err);
+      throw new HttpsError(
+        "internal",
+        "탈퇴 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.",
+      );
+    }
+
+    return { ok: true, publicId };
   },
 );

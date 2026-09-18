@@ -89,5 +89,13 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if false;
     }
+
+    // Email/phone existence checks before login (no PII beyond hashed keys).
+    match /auth_lookup/{lookupId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.authUid == request.auth.uid;
+      allow update, delete: if false;
+    }
   }
 }

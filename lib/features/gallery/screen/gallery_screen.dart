@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:hsdaily_toon/features/auth/ui/session_chrome.dart';
 import 'package:hsdaily_toon/features/diary/ui/diary_flow_background.dart';
 import 'package:hsdaily_toon/features/gallery/model/dummy_gallery_data.dart';
 import 'package:hsdaily_toon/features/gallery/model/gallery_item.dart';
@@ -40,16 +41,21 @@ class _GalleryScreenState extends State<GalleryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.blush,
-      body: ResponsiveLayout(
-        sidebar: const AppNav(selected: AppNavItem.gallery),
-        content: DiaryFlowBackground(
-          child: SafeArea(
-            child: _GalleryBody(
-              state: _state,
-              onOpen: _openDetail,
+      body: Stack(
+        children: [
+          ResponsiveLayout(
+            sidebar: const AppNav(selected: AppNavItem.gallery),
+            content: DiaryFlowBackground(
+              child: SafeArea(
+                child: _GalleryBody(
+                  state: _state,
+                  onOpen: _openDetail,
+                ),
+              ),
             ),
           ),
-        ),
+          const SessionChrome(),
+        ],
       ),
     );
   }
