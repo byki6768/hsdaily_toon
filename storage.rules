@@ -6,11 +6,12 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    // comics/{publicId}/{comicId}/panel_N.webp
+    // comics/{publicId}/{comicId}/panel_N.(png|jpg|webp)
+    // Download URLs with tokens are used in the app; public read keeps gallery/result working for guests.
     match /comics/{publicId}/{comicId}/{fileName} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isSignedIn()
-        && fileName.matches('panel_[1-4]\\.webp|thumb\\.webp')
+        && fileName.matches('panel_[1-4]\\.(webp|png|jpg|jpeg)|thumb\\.(webp|png|jpg|jpeg)')
         && request.resource.size < 8 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
     }

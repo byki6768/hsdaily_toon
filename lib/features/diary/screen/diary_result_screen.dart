@@ -8,7 +8,7 @@ import 'package:hsdaily_toon/features/diary/ui/diary_widgets.dart';
 import 'package:hsdaily_toon/router/app_router.dart';
 import 'package:hsdaily_toon/theme/app_theme.dart';
 
-/// Dummy 4-cut result with home / save actions.
+/// 4-cut comic result with home / save actions.
 class DiaryResultScreen extends StatefulWidget {
   const DiaryResultScreen({super.key, required this.result});
 
@@ -101,7 +101,7 @@ class _DiaryResultScreenState extends State<DiaryResultScreen>
                           ),
                           const SizedBox(height: 8),
                           const Text(
-                            '더미 결과예요. 나중에 AI가 진짜 만화를 그려 줄 예정이에요.',
+                            '일기에서 만든 오늘의 네 컷이에요.',
                             style: TextStyle(
                               fontSize: 14,
                               height: 1.45,

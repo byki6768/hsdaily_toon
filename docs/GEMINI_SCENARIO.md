@@ -14,11 +14,14 @@ npx firebase-tools functions:secrets:set GEMINI_API_KEY --data-file=- --project 
 ## 흐름
 
 1. 앱: 일기 작성 → `generateComicScenario` callable 호출  
-2. Function: Gemini Interactions API (`@google/genai`)로 4장면 JSON 생성  
-3. Firestore `diaries` (+ 없으면 생성) → `scenarios` 저장  
-4. 앱: 패널 설명으로 결과 화면 표시 (이미지는 아직 placeholder)
+2. Function: Gemini로 4장면 JSON 시나리오 생성  
+3. Firestore `diaries` / `scenarios` 저장  
+4. Function: 컷별 이미지 생성 → Storage `comics/{publicId}/{comicId}/panel_N.*` 업로드 → `comics` 저장  
+5. 앱: `imageUrls`로 결과 화면 4칸 표시
 
 ## 모델
 
-우선순위: `gemini-3.6-flash` → `gemini-3-flash-preview` → `gemini-flash-latest` → `gemini-3.1-flash-lite`  
-SDK: `@google/genai` ≥ 2.x (`models.generateContent` 우선, Interactions 폴백)
+시나리오: `gemini-3.6-flash` → `gemini-3-flash-preview` → `gemini-flash-latest` → `gemini-3.1-flash-lite`  
+이미지: `gemini-2.5-flash-image` → `gemini-3.1-flash-image` → `gemini-3.1-flash-lite-image`  
+이미지 폴백: Pollinations (Gemini 이미지 쿼터/과금 미설정 시)  
+SDK: `@google/genai` ≥ 2.x

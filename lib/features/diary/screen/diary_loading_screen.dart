@@ -26,7 +26,8 @@ class _DiaryLoadingScreenState extends State<DiaryLoadingScreen>
   static const _messages = [
     '오늘의 장면을 고르고 있어요…',
     '네 칸의 결을 맞추는 중…',
-    '따뜻하게 색을 입히는 중…',
+    '따뜻하게 그림을 그리는 중…',
+    '컷마다 색을 입히는 중…',
   ];
 
   late final AnimationController _pulse;
@@ -67,6 +68,7 @@ class _DiaryLoadingScreenState extends State<DiaryLoadingScreen>
       final result = ComicResult.fromGeneratedScenario(
         diaryText: widget.diaryText,
         title: generated.title,
+        imageUrls: generated.imageUrls,
         panels: [
           for (final p in generated.panels)
             (index: p.index, description: p.description, label: p.label),

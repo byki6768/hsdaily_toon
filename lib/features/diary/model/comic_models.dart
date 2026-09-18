@@ -81,11 +81,12 @@ class ComicResult {
 
   List<ComicPanel> get panels => strip.panels;
 
-  /// Builds a strip from Gemini scenario panels (images still placeholders).
+  /// Builds a strip from Gemini scenario + generated panel image URLs.
   factory ComicResult.fromGeneratedScenario({
     required String diaryText,
     required String title,
     required List<({int index, String description, String label})> panels,
+    List<String> imageUrls = const [],
   }) {
     assert(panels.length == 4);
     const tints = <Color>[
@@ -104,12 +105,14 @@ class ComicResult {
             ComicPanel(
               index: panels[i].index,
               caption: panels[i].description,
-              image: PlaceholderComicImage(
-                tint: tints[i],
-                label: panels[i].label.isEmpty
-                    ? '${panels[i].index}'
-                    : panels[i].label,
-              ),
+              image: i < imageUrls.length && imageUrls[i].isNotEmpty
+                  ? NetworkComicImage(imageUrls[i])
+                  : PlaceholderComicImage(
+                      tint: tints[i],
+                      label: panels[i].label.isEmpty
+                          ? '${panels[i].index}'
+                          : panels[i].label,
+                    ),
             ),
         ],
       ),

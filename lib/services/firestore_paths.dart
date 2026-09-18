@@ -25,19 +25,21 @@ abstract final class FirestorePaths {
 }
 
 abstract final class StoragePaths {
-  /// comics/{publicId}/{comicId}/panel_{1-4}.webp
+  /// comics/{publicId}/{comicId}/panel_{1-4}.(webp|png|jpg)
   static String panel({
     required String publicId,
     required String comicId,
     required int panelIndex,
+    String ext = 'png',
   }) {
     assert(panelIndex >= 1 && panelIndex <= 4);
-    return 'comics/$publicId/$comicId/panel_$panelIndex.webp';
+    return 'comics/$publicId/$comicId/panel_$panelIndex.$ext';
   }
 
   static String thumb({
     required String publicId,
     required String comicId,
+    String ext = 'png',
   }) =>
-      'comics/$publicId/$comicId/thumb.webp';
+      'comics/$publicId/$comicId/thumb.$ext';
 }

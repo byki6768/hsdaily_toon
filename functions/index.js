@@ -1,10 +1,12 @@
 /**
- * Cloud Functions — Gemini 4-cut scenario generation.
+ * Cloud Functions — Gemini 4-cut scenario + panel image generation.
  * GEMINI_API_KEY is injected via Firebase Secrets (never in client code).
  */
+import { randomUUID } from "node:crypto";
 import { GoogleGenAI } from "@google/genai";
 import { initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { setGlobalOptions } from "firebase-functions/v2";
@@ -14,7 +16,7 @@ setGlobalOptions({ region: "asia-northeast3" });
 
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
-/** Models available for this API key. */
+/** Text scenario models. */
 const MODEL_CANDIDATES = [
   "gemini-3.6-flash",
   "gemini-3-flash-preview",
@@ -22,7 +24,19 @@ const MODEL_CANDIDATES = [
   "gemini-3.1-flash-lite",
 ];
 
+/** Native image models (require billing on many keys; Pollinations is fallback). */
+const IMAGE_MODEL_CANDIDATES = [
+  "gemini-2.5-flash-image",
+  "gemini-3.1-flash-image",
+  "gemini-3.1-flash-lite-image",
+];
+
 const PANEL_LABELS = ["아침", "낮", "저녁", "밤"];
+
+const COMIC_STYLE = `Warm soft Korean webtoon / 4-cut diary comic illustration.
+Same gentle young character across panels: soft brown hair, cozy knit sweater, kind expression.
+Pastel peach and rose palette, soft lighting, cozy atmosphere.
+Single comic panel, square composition, no speech bubbles, no captions, no text, no watermark, no border.`;
 
 function buildPrompt(diaryText) {
   return `당신은 따뜻하고 감성적인 4컷 만화 시나리오 작가입니다.
@@ -41,6 +55,12 @@ ${diaryText}
 
 JSON 형식:
 {"title":"짧은 제목","panels":[{"index":1,"description":"..."},{"index":2,"description":"..."},{"index":3,"description":"..."},{"index":4,"description":"..."}]}`;
+}
+
+function buildImagePrompt(description, panelIndex) {
+  return `${COMIC_STYLE}
+Panel ${panelIndex} of 4.
+Scene to illustrate: ${description}`;
 }
 
 function extractJson(text) {
@@ -117,27 +137,166 @@ async function callGemini(diaryText, apiKey) {
 
   let lastError;
   for (const model of MODEL_CANDIDATES) {
-    // Prefer generateContent (stable for this key), then Interactions.
     try {
       return await generateWithContent(ai, model, prompt);
     } catch (err) {
       lastError = err;
-      console.warn(
-        `generateContent failed: ${model}`,
-        err?.message ?? err,
-      );
+      console.warn(`generateContent failed: ${model}`, err?.message ?? err);
     }
     try {
       return await generateWithInteractions(ai, model, prompt);
     } catch (err) {
       lastError = err;
-      console.warn(
-        `interactions failed: ${model}`,
-        err?.message ?? err,
-      );
+      console.warn(`interactions failed: ${model}`, err?.message ?? err);
     }
   }
   throw lastError ?? new Error("All Gemini models failed");
+}
+
+function extractInlineImage(response) {
+  const parts = response?.candidates?.[0]?.content?.parts ?? response?.parts ?? [];
+  for (const part of parts) {
+    const data = part?.inlineData?.data ?? part?.inline_data?.data;
+    const mimeType =
+      part?.inlineData?.mimeType ??
+      part?.inline_data?.mime_type ??
+      "image/png";
+    if (data) {
+      return {
+        buffer: Buffer.from(data, "base64"),
+        mimeType: String(mimeType),
+      };
+    }
+  }
+  return null;
+}
+
+async function generatePanelWithGemini(ai, prompt) {
+  let lastError;
+  for (const model of IMAGE_MODEL_CANDIDATES) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: { responseModalities: ["Image"] },
+      });
+      const image = extractInlineImage(response);
+      if (image) {
+        return { ...image, provider: model };
+      }
+      lastError = new Error(`No image bytes from ${model}`);
+    } catch (err) {
+      lastError = err;
+      console.warn(`image gen failed: ${model}`, err?.message ?? err);
+    }
+  }
+  throw lastError ?? new Error("Gemini image generation failed");
+}
+
+async function generatePanelWithPollinations(prompt) {
+  const url =
+    "https://image.pollinations.ai/prompt/" +
+    encodeURIComponent(prompt) +
+    "?width=768&height=768&nologo=true&model=flux&enhance=true";
+  const res = await fetch(url, {
+    redirect: "follow",
+    headers: { Accept: "image/*" },
+  });
+  if (!res.ok) {
+    throw new Error(`Pollinations HTTP ${res.status}`);
+  }
+  const mimeType = res.headers.get("content-type") || "image/jpeg";
+  const buffer = Buffer.from(await res.arrayBuffer());
+  if (buffer.length < 1000) {
+    throw new Error("Pollinations returned empty image");
+  }
+  return { buffer, mimeType, provider: "pollinations-flux" };
+}
+
+async function generatePanelImage(ai, description, panelIndex) {
+  const prompt = buildImagePrompt(description, panelIndex);
+  try {
+    return await generatePanelWithGemini(ai, prompt);
+  } catch (err) {
+    console.warn(
+      `Gemini image unavailable for panel ${panelIndex}, using fallback`,
+      err?.message ?? err,
+    );
+    return generatePanelWithPollinations(prompt);
+  }
+}
+
+function extForMime(mimeType) {
+  if (mimeType.includes("webp")) return "webp";
+  if (mimeType.includes("jpeg") || mimeType.includes("jpg")) return "jpg";
+  return "png";
+}
+
+async function uploadPanelImage({
+  bucket,
+  publicId,
+  comicId,
+  panelIndex,
+  buffer,
+  mimeType,
+}) {
+  const ext = extForMime(mimeType);
+  const storagePath = `comics/${publicId}/${comicId}/panel_${panelIndex}.${ext}`;
+  const token = randomUUID();
+  const file = bucket.file(storagePath);
+  await file.save(buffer, {
+    resumable: false,
+    metadata: {
+      contentType: mimeType,
+      cacheControl: "public,max-age=31536000",
+      metadata: {
+        firebaseStorageDownloadTokens: token,
+      },
+    },
+  });
+  const downloadUrl =
+    `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/` +
+    `${encodeURIComponent(storagePath)}?alt=media&token=${token}`;
+  return { storagePath, downloadUrl };
+}
+
+async function generateAndStoreComicImages({
+  apiKey,
+  publicId,
+  comicId,
+  panels,
+}) {
+  const ai = new GoogleGenAI({ apiKey });
+  const bucket = getStorage().bucket();
+
+  const generated = await Promise.all(
+    panels.map((panel) =>
+      generatePanelImage(ai, panel.description, panel.index),
+    ),
+  );
+
+  const uploaded = [];
+  for (let i = 0; i < 4; i++) {
+    const img = generated[i];
+    const meta = await uploadPanelImage({
+      bucket,
+      publicId,
+      comicId,
+      panelIndex: i + 1,
+      buffer: img.buffer,
+      mimeType: img.mimeType,
+    });
+    uploaded.push({
+      ...meta,
+      provider: img.provider,
+    });
+  }
+
+  return {
+    imageUrls: uploaded.map((u) => u.downloadUrl),
+    storagePaths: uploaded.map((u) => u.storagePath),
+    imageProviders: uploaded.map((u) => u.provider),
+  };
 }
 
 function makeGuestPublicId() {
@@ -152,13 +311,13 @@ function makeGuestPublicId() {
 
 /**
  * Callable: { diaryText: string, publicId?: string, diaryId?: string }
- * Returns scenario + 4 panel descriptions; persists to Firestore `scenarios`.
+ * Returns scenario + 4 panel images (Storage URLs).
  */
 export const generateComicScenario = onCall(
   {
     secrets: [geminiApiKey],
-    timeoutSeconds: 120,
-    memory: "512MiB",
+    timeoutSeconds: 540,
+    memory: "1GiB",
     invoker: "public",
   },
   async (request) => {
@@ -230,14 +389,63 @@ export const generateComicScenario = onCall(
       status: "ready",
     });
 
+    const comicRef = db.collection("comics").doc();
+    await comicRef.set({
+      scenarioId: scenarioRef.id,
+      diaryId,
+      publicId,
+      title: generated.title,
+      imageUrls: [],
+      storagePaths: [],
+      thumbnailUrl: null,
+      createdAt: FieldValue.serverTimestamp(),
+      status: "processing",
+    });
+
+    let imageUrls = [];
+    let storagePaths = [];
+    let imageProviders = [];
+    try {
+      const images = await generateAndStoreComicImages({
+        apiKey: geminiApiKey.value(),
+        publicId,
+        comicId: comicRef.id,
+        panels: generated.panels,
+      });
+      imageUrls = images.imageUrls;
+      storagePaths = images.storagePaths;
+      imageProviders = images.imageProviders;
+      await comicRef.update({
+        imageUrls,
+        storagePaths,
+        thumbnailUrl: imageUrls[0] ?? null,
+        imageProviders,
+        status: "ready",
+      });
+    } catch (err) {
+      console.error("Comic image generation failed", err);
+      await comicRef.update({
+        status: "failed",
+        error: String(err?.message ?? err),
+      });
+      throw new HttpsError(
+        "internal",
+        "만화 이미지 생성에 실패했어요. 잠시 후 다시 시도해 주세요.",
+      );
+    }
+
     return {
       scenarioId: scenarioRef.id,
+      comicId: comicRef.id,
       diaryId,
       publicId,
       title: generated.title,
       model: generated.model,
       panels: generated.panels,
       text,
+      imageUrls,
+      storagePaths,
+      imageProviders,
     };
   },
 );

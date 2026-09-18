@@ -32,6 +32,8 @@ class GeneratedScenario {
     required this.model,
     required this.text,
     required this.panels,
+    this.comicId = '',
+    this.imageUrls = const [],
   });
 
   final String scenarioId;
@@ -41,11 +43,17 @@ class GeneratedScenario {
   final String model;
   final String text;
   final List<ScenarioPanel> panels;
+  final String comicId;
+  final List<String> imageUrls;
 
   factory GeneratedScenario.fromMap(Map<String, dynamic> data) {
     final rawPanels = (data['panels'] as List<dynamic>? ?? const [])
         .whereType<Map>()
         .map((e) => ScenarioPanel.fromMap(Map<String, dynamic>.from(e)))
+        .toList();
+    final rawUrls = (data['imageUrls'] as List<dynamic>? ?? const [])
+        .map((e) => e?.toString().trim() ?? '')
+        .where((e) => e.isNotEmpty)
         .toList();
 
     return GeneratedScenario(
@@ -56,6 +64,8 @@ class GeneratedScenario {
       model: data['model'] as String? ?? '',
       text: data['text'] as String? ?? '',
       panels: rawPanels,
+      comicId: data['comicId'] as String? ?? '',
+      imageUrls: rawUrls,
     );
   }
 }
@@ -72,7 +82,7 @@ class ScenarioService {
   Future<GeneratedScenario> generateFromDiary(String diaryText) async {
     final callable = _functions.httpsCallable(
       'generateComicScenario',
-      options: HttpsCallableOptions(timeout: const Duration(seconds: 120)),
+      options: HttpsCallableOptions(timeout: const Duration(seconds: 540)),
     );
 
     try {
@@ -83,6 +93,11 @@ class ScenarioService {
       final scenario = GeneratedScenario.fromMap(data);
       if (scenario.panels.length != 4) {
         throw StateError('Expected 4 panels, got ${scenario.panels.length}');
+      }
+      if (scenario.imageUrls.length != 4) {
+        throw StateError(
+          'Expected 4 imageUrls, got ${scenario.imageUrls.length}',
+        );
       }
       return scenario;
     } on FirebaseFunctionsException catch (e, st) {

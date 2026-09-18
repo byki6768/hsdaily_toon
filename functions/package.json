@@ -1,6 +1,6 @@
 {
   "name": "hsdaily-toon-functions",
-  "description": "Cloud Functions for hsdaily-toon (Gemini scenario generation)",
+  "description": "Cloud Functions for hsdaily-toon (Gemini scenario + comic images)",
   "engines": {
     "node": "22"
   },
