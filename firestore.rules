@@ -37,9 +37,9 @@ service cloud.firestore {
     }
 
     match /public_ids/{publicId} {
-      allow read: if isSignedIn()
-        && (resource.data.authUid == request.auth.uid
-            || resource.data.publicId == myPublicId());
+      // Allow signed-in get so clients can check ID uniqueness (missing docs too).
+      allow get: if isSignedIn();
+      allow list: if false;
       allow create: if isSignedIn()
         && request.resource.data.authUid == request.auth.uid
         && publicId.matches('[A-Za-z][A-Za-z0-9]{15}');

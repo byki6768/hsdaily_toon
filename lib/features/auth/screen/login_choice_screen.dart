@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -29,9 +30,26 @@ class _LoginChoiceScreenState extends State<LoginChoiceScreen> {
           ? AppRouter.home
           : AppRouter.nicknameWelcome;
       Navigator.of(context).pushNamedAndRemoveUntil(next, (r) => false);
-    } catch (_) {
+    } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Google 로그인에 실패했어요. 다시 시도해 주세요');
+      setState(() {
+        _error = switch (e.code) {
+          'popup-closed-by-user' || 'cancelled-popup-request' =>
+            '로그인이 취소되었어요. 다시 시도해 볼까요?',
+          'account-exists-with-different-credential' =>
+            '같은 이메일로 다른 방식 가입이 되어 있어요.',
+          'unauthorized-domain' =>
+            '이 도메인에서는 Google 로그인을 쓸 수 없어요. 관리자에게 문의해 주세요.',
+          'user-disabled' => '탈퇴한 계정입니다',
+          _ => e.message?.trim().isNotEmpty == true
+              ? e.message!
+              : 'Google 로그인에 실패했어요. 다시 시도해 주세요',
+        };
+      });
+    } catch (e) {
+      if (!mounted) return;
+      debugPrint('Google login failed: $e');
+      setState(() => _error = 'Google 로그인에 실패했어요. 팝업 차단을 해제한 뒤 다시 시도해 주세요');
     } finally {
       if (mounted) setState(() => _busy = false);
     }

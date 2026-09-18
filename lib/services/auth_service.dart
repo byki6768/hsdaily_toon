@@ -29,35 +29,48 @@ class AuthService extends ChangeNotifier {
   bool _booting = true;
   bool _googleReady = false;
 
+  /// While creating Firestore profile after Auth signup/login.
+  bool _provisioning = false;
+
   MemberProfile? get profile => _profile;
   User? get firebaseUser => _auth.currentUser;
-  bool get isSignedIn => _auth.currentUser != null && _profile != null && !(_profile!.isWithdrawn);
+  bool get isSignedIn =>
+      _auth.currentUser != null &&
+      _profile != null &&
+      !_profile!.isWithdrawn;
   bool get needsNickname =>
       isSignedIn && _profile != null && !_profile!.nicknameSet;
   bool get isBooting => _booting;
 
-  Future<void> _ensureGoogle() async {
-    if (_googleReady) return;
+  Future<void> _ensureGoogleMobile() async {
+    if (kIsWeb || _googleReady) return;
     try {
       await _google.initialize();
       _googleReady = true;
     } catch (e) {
       debugPrint('GoogleSignIn initialize: $e');
+      rethrow;
     }
   }
 
   Future<void> _onAuthChanged(User? user) async {
     if (user == null) {
-      _profile = null;
+      if (!_provisioning) {
+        _profile = null;
+      }
       _booting = false;
       notifyListeners();
       return;
     }
+    if (_provisioning) {
+      // Profile is being written by the active sign-in/up method.
+      return;
+    }
     try {
-      var profile = await _users.getProfile(user.uid);
+      final profile = await _users.getProfile(user.uid);
       if (profile == null || profile.isWithdrawn) {
-        // Orphan auth without profile — sign out.
-        await _auth.signOut();
+        // Don't sign out during a racing provision; otherwise orphan Auth only.
+        debugPrint('No active profile for ${user.uid}');
         _profile = null;
       } else {
         _profile = profile;
@@ -71,6 +84,15 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<T> _withProvisioning<T>(Future<T> Function() action) async {
+    _provisioning = true;
+    try {
+      return await action();
+    } finally {
+      _provisioning = false;
+    }
+  }
+
   Future<void> refreshProfile() async {
     final uid = _auth.currentUser?.uid;
     if (uid == null) return;
@@ -81,45 +103,51 @@ class AuthService extends ChangeNotifier {
   Future<MemberProfile> signUpEmail({
     required String email,
     required String password,
-  }) async {
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: email.trim().toLowerCase(),
-      password: password,
-    );
-    final user = cred.user!;
-    final profile = await _users.createMember(
-      authUid: user.uid,
-      email: email.trim().toLowerCase(),
-      authProviders: const ['email'],
-    );
-    _profile = profile;
-    notifyListeners();
-    return profile;
+  }) {
+    return _withProvisioning(() async {
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email.trim().toLowerCase(),
+        password: password,
+      );
+      final user = cred.user!;
+      final profile = await _users.createMember(
+        authUid: user.uid,
+        email: email.trim().toLowerCase(),
+        authProviders: const ['email'],
+      );
+      _profile = profile;
+      _booting = false;
+      notifyListeners();
+      return profile;
+    });
   }
 
   Future<MemberProfile> signUpPhone({
     required String countryCode,
     required String nationalNumber,
     required String password,
-  }) async {
-    final email = AuthValidators.phoneAuthEmail(
-      countryCode: countryCode,
-      nationalNumber: nationalNumber,
-    );
-    final cred = await _auth.createUserWithEmailAndPassword(
-      email: email,
-      password: password,
-    );
-    final user = cred.user!;
-    final profile = await _users.createMember(
-      authUid: user.uid,
-      countryCode: countryCode,
-      nationalNumber: nationalNumber,
-      authProviders: const ['phone'],
-    );
-    _profile = profile;
-    notifyListeners();
-    return profile;
+  }) {
+    return _withProvisioning(() async {
+      final email = AuthValidators.phoneAuthEmail(
+        countryCode: countryCode,
+        nationalNumber: nationalNumber,
+      );
+      final cred = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final user = cred.user!;
+      final profile = await _users.createMember(
+        authUid: user.uid,
+        countryCode: countryCode,
+        nationalNumber: nationalNumber,
+        authProviders: const ['phone'],
+      );
+      _profile = profile;
+      _booting = false;
+      notifyListeners();
+      return profile;
+    });
   }
 
   Future<MemberProfile> signInEmail({
@@ -171,38 +199,57 @@ class AuthService extends ChangeNotifier {
     return profile;
   }
 
-  Future<MemberProfile> signInWithGoogle() async {
-    await _ensureGoogle();
-    final account = await _google.authenticate();
-    final idToken = account.authentication.idToken;
-    if (idToken == null) {
-      throw StateError('Google idToken missing');
-    }
-    final credential = GoogleAuthProvider.credential(idToken: idToken);
-    final cred = await _auth.signInWithCredential(credential);
-    final user = cred.user!;
-    var profile = await _users.getProfile(user.uid);
-    if (profile == null) {
-      profile = await _users.createMember(
-        authUid: user.uid,
-        googleEmail: user.email,
-        email: user.email,
-        authProviders: const ['google'],
-        photoUrl: user.photoURL,
-      );
-    } else if (profile.isWithdrawn) {
-      await _auth.signOut();
-      throw FirebaseAuthException(
-        code: 'user-disabled',
-        message: '탈퇴한 계정입니다',
-      );
-    } else {
-      await _users.touchLogin(user.uid);
-      profile = (await _users.getProfile(user.uid))!;
-    }
-    _profile = profile;
-    notifyListeners();
-    return profile;
+  /// Google Sign-In.
+  /// Web: Firebase Auth popup (google_sign_in.authenticate is unsupported on web).
+  /// Mobile: google_sign_in → Firebase credential.
+  Future<MemberProfile> signInWithGoogle() {
+    return _withProvisioning(() async {
+      final UserCredential cred;
+      if (kIsWeb) {
+        final provider = GoogleAuthProvider()
+          ..addScope('email')
+          ..setCustomParameters({'prompt': 'select_account'});
+        cred = await _auth.signInWithPopup(provider);
+      } else {
+        await _ensureGoogleMobile();
+        final account = await _google.authenticate();
+        final idToken = account.authentication.idToken;
+        if (idToken == null || idToken.isEmpty) {
+          throw StateError('Google idToken missing');
+        }
+        final credential = GoogleAuthProvider.credential(idToken: idToken);
+        cred = await _auth.signInWithCredential(credential);
+      }
+
+      final user = cred.user;
+      if (user == null) {
+        throw StateError('Google sign-in returned no user');
+      }
+
+      var profile = await _users.getProfile(user.uid);
+      if (profile == null) {
+        profile = await _users.createMember(
+          authUid: user.uid,
+          googleEmail: user.email,
+          email: user.email,
+          authProviders: const ['google'],
+          photoUrl: user.photoURL,
+        );
+      } else if (profile.isWithdrawn) {
+        await _auth.signOut();
+        throw FirebaseAuthException(
+          code: 'user-disabled',
+          message: '탈퇴한 계정입니다',
+        );
+      } else {
+        await _users.touchLogin(user.uid);
+        profile = (await _users.getProfile(user.uid))!;
+      }
+      _profile = profile;
+      _booting = false;
+      notifyListeners();
+      return profile;
+    });
   }
 
   Future<void> saveNickname(String nickname) async {
@@ -254,9 +301,11 @@ class AuthService extends ChangeNotifier {
         await _users.syncSession(uid);
       } catch (_) {}
     }
-    try {
-      await _google.signOut();
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        await _google.signOut();
+      } catch (_) {}
+    }
     await _auth.signOut();
     _profile = null;
     notifyListeners();
